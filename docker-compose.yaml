@@ -1,0 +1,53 @@
+version: '2.1'
+services:
+  kinesis:
+    build:
+      context: docker-kinesalite/
+      dockerfile: Dockerfile
+    expose:
+      - "4567"
+    command: ["--port", "4567", "--createStreamMs", "500", "--deleteStreamMs", "500", "--updateStreamMs", "500", "--shardLimit", "256"]
+  jobmanager:
+    image: ${FLINK_DOCKER_IMAGE_NAME:-flink}
+    expose:
+      - "6123"
+    ports:
+      - "8081:8081"
+    command: jobmanager
+    environment:
+      - JOB_MANAGER_RPC_ADDRESS=jobmanager
+  taskmanager:
+    image: ${FLINK_DOCKER_IMAGE_NAME:-flink}
+    expose:
+      - "6121"
+      - "6122"
+    depends_on:
+      - jobmanager
+    command: taskmanager
+    links:
+      - "jobmanager:jobmanager"
+    environment:
+      - JOB_MANAGER_RPC_ADDRESS=jobmanager
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - kinesis
+      - jobmanager
+      - taskmanager
+    expose:
+      - "8081"
+    command:
+      - "--endpoint"
+      - "http://kinesis:4567"
+      - "--stream"
+      - "test-stream"
+  producer_jupyter:
+    build:
+      context: docker-kinesis-producer-jupyter
+      dockerfile: Dockerfile
+    depends_on:
+      - kinesis
+    ports:
+      - "18889:8888"
