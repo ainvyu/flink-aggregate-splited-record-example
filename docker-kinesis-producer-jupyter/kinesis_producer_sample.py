@@ -16,21 +16,22 @@ client = boto3.client(
     use_ssl=False,
 )
 
-def get_records(stream_name):
+def get_records(stream_name, start_time: dt.datetime):
     shard_ids = [shard['ShardId'] for shard in client.describe_stream(StreamName=stream_name)['StreamDescription']['Shards']]
 
     def get_shard_iterator(stream_name, shard_id):
         return client.get_shard_iterator(
             StreamName=stream_name,
             ShardId=shard_id,
-            ShardIteratorType='TRIM_HORIZON',
+            ShardIteratorType='AT_TIMESTAMP',
+            Timestamp=start_time
         )['ShardIterator']
 
     shard_iterators = [(shard_id, get_shard_iterator(stream_name, shard_id)) for shard_id in shard_ids]
 
     records = [record for shard_id, shard_iterator in shard_iterators for record in client.get_records(ShardIterator=shard_iterator, Limit=10)['Records']]
 
-    return [base64.b64decode(record['Data']).decode() for record in records]
+    return [record['Data'].decode() for record in records]
     
 def put_record(record, size=5):
     def split_record(whole_record, size):
@@ -43,7 +44,7 @@ def put_record(record, size=5):
 
     for piece in split_record(record, size):
         partition_key = hashlib.md5("{}.{}".format(piece['record_id'], piece['count']).encode()).hexdigest()
-        piece_data = base64.b64encode(json.dumps(piece).encode())
+        piece_data = json.dumps(piece)
         response = client.put_record(
             StreamName="test-stream",
             Data=piece_data,
@@ -52,5 +53,7 @@ def put_record(record, size=5):
         print(response)
 
 sample_record = "aaaaabbbbbccccc"
+start_time = dt.datetime.now()
+
 put_record(sample_record, 5)
-#get_records('test-stream')
+print(get_records('test-stream', start_time=start_time))

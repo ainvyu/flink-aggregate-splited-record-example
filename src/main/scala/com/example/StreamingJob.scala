@@ -76,9 +76,9 @@ object StreamingJob {
     // set up the streaming execution environment
     val env = StreamExecutionEnvironment.getExecutionEnvironment
 
-    val kinesisConsumerConfig = new Properties();
+    val kinesisConsumerConfig = new Properties
     params.kinesisRegion match {
-      case Some(region) => kinesisConsumerConfig.setProperty(AWSConfigConstants.AWS_REGION, region.getName())
+      case Some(region) => kinesisConsumerConfig.setProperty(AWSConfigConstants.AWS_REGION, region.getName)
       case _ => 
     }
     kinesisConsumerConfig.put(AWSConfigConstants.AWS_ACCESS_KEY_ID, params.kinesisAwsAccessKeyId.getOrElse("aws_access_key_id"))
@@ -100,13 +100,11 @@ object StreamingJob {
         kinesisConsumerConfig
     ))
 
-    val decodedRecordStream = kinesisStream.map(record => Base64.getDecoder.decode(record.getBytes(StandardCharsets.UTF_8)))
-
-    val splitRecordStream: DataStream[SplitRecord] = decodedRecordStream.map(obj => {
+    val splitRecordStream: DataStream[SplitRecord] = kinesisStream.map(record => {
       implicit val codec: JsonValueCodec[SplitRecord] = JsonCodecMaker.make(
         CodecMakerConfig.withFieldNameMapper(JsonCodecMaker.enforce_snake_case)
       )
-      readFromArray[SplitRecord](obj)
+      readFromArray[SplitRecord](record.getBytes(StandardCharsets.UTF_8))
     })
     .assignTimestampsAndWatermarks(new AscendingTimestampExtractor[SplitRecord] {
       def extractAscendingTimestamp(splitRecord: SplitRecord): Long = splitRecord.timestamp
